@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat{% endblock %}
+
+{% block content %}
+<div class="flex h-screen">
+  <!-- Collapsible Left Menu -->
+  <nav class="bg-gray-200 w-1/4 p-4 overflow-y-auto rounded-l-lg shadow-lg">
+    <h3 class="font-bold text-lg mb-6 text-blue-600">Users</h3>
+    <ul>
+      {% for user in users %}
+      <li>
+        <a href="#" class="block p-3 mb-2 bg-white hover:bg-blue-100 rounded-lg transition ease-in-out duration-200 user-item" data-username="{{ user.username }}">
+          <span class="font-bold capitalize text-gray-700">{{ user.username|upper }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <!-- Chat Interface -->
+  <div class="flex-1 p-6 bg-gray-50">
+    <div id="chat-box" class="bg-white p-6 h-4/5 overflow-y-auto border border-gray-300 rounded-lg shadow-lg">
+      <h3 id="chat-header" class="font-bold mb-6 text-center text-gray-600">Select a user to start chatting</h3>
+      <!-- Display current full date here after a user is selected -->
+      <div id="current-date" class="text-center text-gray-500 font-semibold mb-6" style="display: none;"></div>
+    </div>
+    <form id="chat-form" class="flex mt-4" style="display:none;">
+      <input type="text" id="message" placeholder="Type your message..." 
+        class="flex-1 border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition ease-in-out duration-300">Send</button>
+    </form>
+  </div>
+</div>
+
+<!-- Script for Polling and Dynamic Chat -->
+<script>
+  const chatBox = document.getElementById('chat-box');
+  const messageInput = document.getElementById('message');
+  const chatForm = document.getElementById('chat-form');
+  const currentDateElem = document.getElementById('current-date');
+  const chatHeader = document.getElementById('chat-header');
+  let recipient = null;
+  const currentUser = "{{ user.username }}";  // Get the logged-in user's username from Django template context
+
+  // Format the full date as "18 January, 2025"
+  function formatFullDate() {
+    const today = new Date();
+    const day = today.getDate();
+    const month = today.toLocaleString('default', { month: 'long' });
+    const year = today.getFullYear();
+    return `${day} ${month}, ${year}`;
+  }
+
+  // Display the current date
+  function displayCurrentDate() {
+    currentDateElem.textContent = formatFullDate();
+    currentDateElem.style.display = 'block';  // Show the date when a user is selected
+  }
+
+  // Fetch old messages
+  async function fetchMessages() {
+    if (recipient) {
+      try {
+        const response = await fetch(`/messages/${recipient}/`);
+        const data = await response.json();
+        
+        chatBox.innerHTML = '';  // Clear previous messages
+        let currentMonthYear = null;  // Variable to store current month and year for display
+
+        // If no messages are found
+        if (data.messages.length === 0) {
+          chatBox.innerHTML = `<p class="text-center text-gray-500 font-semibold">No messages yet.</p>`;
+          return;  // Stop here, no need to proceed further
+        }
+        
+        data.messages.forEach(msg => {
+          const messageDate = new Date(msg.timestamp);
+          const messageMonthYear = messageDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+          
+          // If the month and year have changed, display it
+          if (currentMonthYear !== messageMonthYear) {
+            chatBox.innerHTML += `<div class="text-center text-gray-600 font-semibold mt-4 mb-2">${messageMonthYear}</div>`;
+            currentMonthYear = messageMonthYear;
+          }
+
+          const alignmentClass = msg.sender === currentUser ? "text-right" : "text-left";  // Align messages
+          chatBox.innerHTML += `
+            <div class="mb-4 ${alignmentClass}">
+              <p class="font-semibold text-gray-700">${msg.sender}:</p>
+              <p class="text-gray-600">${msg.content}</p>
+              <span class="text-gray-500 text-sm">${formatTime(msg.timestamp)}</span>
+            </div>
+          `;
+        });
+      } catch (error) {
+        chatBox.innerHTML += `<p class="text-red-500">An error occurred while fetching messages.</p>`;
+      }
+    }
+  }
+
+  // Format time in hours and minutes (e.g., 10:45 AM)
+  function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12; // Convert 24-hour to 12-hour format
+    const formattedMinutes = minutes < 10 ? '0' + minutes : minutes; // Add leading zero if minutes are single digit
+    return `${formattedHours}:${formattedMinutes} ${period}`;
+  }
+
+  // Polling for new messages every 5 seconds
+  setInterval(fetchMessages, 5000);
+
+  // Send message
+  chatForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const message = messageInput.value.trim();
+    if (message && recipient) {
+      try {
+        const response = await fetch('/send-message/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient, message }),
+        });
+        if (response.ok) {
+          fetchMessages();  // Refresh messages after sending
+          messageInput.value = '';  // Clear the input field
+        } else {
+          chatBox.innerHTML += `<p class="text-red-500">Failed to send message.</p>`;
+        }
+      } catch (error) {
+        chatBox.innerHTML += `<p class="text-red-500">An error occurred while sending the message.</p>`;
+      }
+    }
+  });
+
+  // Select recipient
+  document.querySelectorAll('.user-item').forEach(user => {
+    user.addEventListener('click', () => {
+      recipient = user.dataset.username;
+      chatHeader.innerHTML = `Chat with ${recipient}`;  // Display the recipient name
+      fetchMessages();  // Fetch old messages when a user is selected
+
+      // Display the current date once a user is selected
+      displayCurrentDate();
+
+      // Show the input and send button when a recipient is selected
+      chatForm.style.display = 'flex';
+
+      // Save the selected user in localStorage
+      localStorage.setItem('selectedRecipient', recipient);
+    });
+  });
+
+  // Initially check if a user was already selected and stored in localStorage
+  const savedRecipient = localStorage.getItem('selectedRecipient');
+  if (savedRecipient) {
+    recipient = savedRecipient;
+    chatHeader.innerHTML = `Chat with ${recipient}`;  // Display the recipient name
+    fetchMessages();  // Fetch old messages for the saved recipient
+    displayCurrentDate();  // Display the current date
+    chatForm.style.display = 'flex';  // Show the input and send button
+  } else {
+    chatForm.style.display = 'none';  // Hide the input and send button if no recipient selected
+  }
+
+</script>
+{% endblock %}
