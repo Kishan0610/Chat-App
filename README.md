@@ -12,7 +12,7 @@ A real-time chat application built with **Django**, **WebSocket**, and **Tailwin
 ## Prerequisites
 - Python 3.8 or above
 - Node.js (for Tailwind CSS, if not using a CDN)
-- A database (SQLite, PostgreSQL, or MySQL)
+- A database (SQLite)
 
 ## Installation
 1. Clone the repository:
