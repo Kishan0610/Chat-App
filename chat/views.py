@@ -2,17 +2,17 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth.views import LogoutView, LoginView  # <-- Add LoginView import
+from django.contrib.auth.views import LogoutView, LoginView
 from .models import Message
 from django.http import JsonResponse
 import json
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.forms import UserCreationForm
 
 def index(request):
     if request.user.is_authenticated:
         return redirect('chat')  
     return redirect('login')  
+
 def signup(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
@@ -27,7 +27,6 @@ class CustomLoginView(LoginView):
     template_name = 'login.html'
 
     def form_invalid(self, form):
-        # Add custom error message for invalid login
         form.add_error(None, 'Invalid username or password. Please try again.')
         return super().form_invalid(form)
 
@@ -36,24 +35,15 @@ class CustomLogoutView(LogoutView):
 
 @login_required
 def chat_view(request):
-    users = User.objects.exclude(username=request.user.username)  # Exclude the logged-in user
+    users = User.objects.exclude(username=request.user.username)
     return render(request, 'chat.html', {'users': users})
-
-
-import logging
-logger = logging.getLogger(__name__)
-
 
 @login_required
 def fetch_messages(request, recipient_username):
     sender = request.user
     try:
         recipient = User.objects.get(username=recipient_username)
-        messages = Message.objects.filter(
-            sender=sender, receiver=recipient
-        ) | Message.objects.filter(
-            sender=recipient, receiver=sender
-        )
+        messages = Message.objects.filter(sender=sender, receiver=recipient) | Message.objects.filter(sender=recipient, receiver=sender)
         messages = messages.order_by('timestamp')
 
         message_list = [
@@ -63,7 +53,7 @@ def fetch_messages(request, recipient_username):
         return JsonResponse({"messages": message_list}, status=200)
     except User.DoesNotExist:
         return JsonResponse({"error": "Recipient not found"}, status=404)
-    
+
 @csrf_exempt
 def send_message(request):
     if request.method == 'POST':

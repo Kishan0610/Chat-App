@@ -4,14 +4,14 @@
 
 {% block content %}
 <div class="flex h-screen">
-  <!-- Collapsible Left Menu -->
-  <nav class="bg-gray-200 w-1/4 p-4 overflow-y-auto rounded-l-lg shadow-lg">
-    <h3 class="font-bold text-lg mb-6 text-blue-600">Users</h3>
-    <ul>
+  <!-- Left Menu -->
+  <nav id="left-menu" class="bg-gray-200 w-full md:w-1/4 p-4 overflow-y-auto rounded-l-lg shadow-lg block md:block">
+    <h3 class="font-bold text-lg text-blue-600">Users</h3>
+    <ul id="user-list">
       {% for user in users %}
       <li>
-        <a href="#" class="block p-3 mb-2 bg-white hover:bg-blue-100 rounded-lg transition ease-in-out duration-200 user-item" data-username="{{ user.username }}">
-          <span class="font-bold capitalize text-gray-700">{{ user.username|upper }}</span>
+        <a href="#" class="block p-3 mb-2 bg-white hover:bg-blue-100 rounded-lg user-item" data-username="{{ user.username }}">
+          <span class="font-bold text-gray-700">{{ user.username|slice:":10"|capfirst }}</span> <!-- Capitalize the first letter -->
         </a>
       </li>
       {% endfor %}
@@ -19,152 +19,185 @@
   </nav>
 
   <!-- Chat Interface -->
-  <div class="flex-1 p-6 bg-gray-50">
-    <div id="chat-box" class="bg-white p-6 h-4/5 overflow-y-auto border border-gray-300 rounded-lg shadow-lg">
-      <h3 id="chat-header" class="font-bold mb-6 text-center text-gray-600">Select a user to start chatting</h3>
-      <!-- Display current full date here after a user is selected -->
-      <div id="current-date" class="text-center text-gray-500 font-semibold mb-6" style="display: none;"></div>
+  <div id="chat-interface" class="flex-1 p-6 bg-gray-50 hidden md:block">
+    <button id="back-button" class="bg-gray-300 px-4 py-2 rounded-lg mb-4 md:hidden">
+      Back
+    </button>
+    <div id="chat-box" class="bg-white p-6 h-4/5 overflow-y-auto border border-gray-300 rounded-lg">
+      <div id="chat-header" class="font-bold text-xl text-gray-700 mb-6">
+        <!-- Display a prompt if no user is selected yet -->
+        <span id="chat-header-text">Select a user to chat</span>
+        <span id="recipient-name" style="display: none;"></span>
+      </div>
+      <div id="chat-messages" class="space-y-4"></div>
     </div>
     <form id="chat-form" class="flex mt-4" style="display:none;">
-      <input type="text" id="message" placeholder="Type your message..." 
-        class="flex-1 border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition ease-in-out duration-300">Send</button>
+      <input type="text" id="message" placeholder="Type your message..." class="flex-1 border rounded-lg p-3">
+      <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg">Send</button>
     </form>
   </div>
 </div>
 
-<!-- Script for Polling and Dynamic Chat -->
 <script>
-  const chatBox = document.getElementById('chat-box');
-  const messageInput = document.getElementById('message');
-  const chatForm = document.getElementById('chat-form');
-  const currentDateElem = document.getElementById('current-date');
-  const chatHeader = document.getElementById('chat-header');
-  let recipient = null;
-  const currentUser = "{{ user.username }}";  // Get the logged-in user's username from Django template context
+let recipient = null;
+let pollInterval = null; // Interval for polling
+const chatBox = document.getElementById("chat-box");
+const chatForm = document.getElementById("chat-form");
+const messageInput = document.getElementById("message");
+const recipientNameElem = document.getElementById("recipient-name");
+const chatHeaderText = document.getElementById("chat-header-text");
+const userItems = document.querySelectorAll(".user-item");
+const chatMessages = document.getElementById("chat-messages");
+const chatInterface = document.getElementById("chat-interface");
+const leftMenu = document.getElementById("left-menu");
+const backButton = document.getElementById("back-button");
 
-  // Format the full date as "18 January, 2025"
-  function formatFullDate() {
-    const today = new Date();
-    const day = today.getDate();
-    const month = today.toLocaleString('default', { month: 'long' });
-    const year = today.getFullYear();
-    return `${day} ${month}, ${year}`;
-  }
+// Highlight the selected user
+userItems.forEach((user) => {
+  user.addEventListener("click", () => {
+    recipient = user.dataset.username;
 
-  // Display the current date
-  function displayCurrentDate() {
-    currentDateElem.textContent = formatFullDate();
-    currentDateElem.style.display = 'block';  // Show the date when a user is selected
-  }
+    // Highlight the selected user
+    userItems.forEach((item) => item.classList.remove("bg-blue-200")); // Remove highlight from other users
+    user.classList.add("bg-blue-200"); // Add highlight to the selected user
 
-  // Fetch old messages
-  async function fetchMessages() {
-    if (recipient) {
-      try {
-        const response = await fetch(`/messages/${recipient}/`);
-        const data = await response.json();
-        
-        chatBox.innerHTML = '';  // Clear previous messages
-        let currentMonthYear = null;  // Variable to store current month and year for display
+    recipientNameElem.textContent =
+      recipient.charAt(0).toUpperCase() + recipient.slice(1); // Capitalize the first letter
+    recipientNameElem.style.display = "inline";
+    chatHeaderText.style.display = "none"; // Hide the "Select a user to chat" prompt
+    chatForm.style.display = "flex";
 
-        // If no messages are found
-        if (data.messages.length === 0) {
-          chatBox.innerHTML = `<p class="text-center text-gray-500 font-semibold">No messages yet.</p>`;
-          return;  // Stop here, no need to proceed further
-        }
-        
-        data.messages.forEach(msg => {
-          const messageDate = new Date(msg.timestamp);
-          const messageMonthYear = messageDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-          
-          // If the month and year have changed, display it
-          if (currentMonthYear !== messageMonthYear) {
-            chatBox.innerHTML += `<div class="text-center text-gray-600 font-semibold mt-4 mb-2">${messageMonthYear}</div>`;
-            currentMonthYear = messageMonthYear;
-          }
-
-          const alignmentClass = msg.sender === currentUser ? "text-right" : "text-left";  // Align messages
-          chatBox.innerHTML += `
-            <div class="mb-4 ${alignmentClass}">
-              <p class="font-semibold text-gray-700">${msg.sender}:</p>
-              <p class="text-gray-600">${msg.content}</p>
-              <span class="text-gray-500 text-sm">${formatTime(msg.timestamp)}</span>
-            </div>
-          `;
-        });
-      } catch (error) {
-        chatBox.innerHTML += `<p class="text-red-500">An error occurred while fetching messages.</p>`;
-      }
+    // For mobile: hide user list and display chatbox
+    if (window.innerWidth < 768) {
+      leftMenu.style.display = "none";
+      chatInterface.style.display = "block";
     }
-  }
 
-  // Format time in hours and minutes (e.g., 10:45 AM)
-  function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const formattedHours = hours % 12 || 12; // Convert 24-hour to 12-hour format
-    const formattedMinutes = minutes < 10 ? '0' + minutes : minutes; // Add leading zero if minutes are single digit
-    return `${formattedHours}:${formattedMinutes} ${period}`;
-  }
-
-  // Polling for new messages every 5 seconds
-  setInterval(fetchMessages, 5000);
-
-  // Send message
-  chatForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const message = messageInput.value.trim();
-    if (message && recipient) {
-      try {
-        const response = await fetch('/send-message/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recipient, message }),
-        });
-        if (response.ok) {
-          fetchMessages();  // Refresh messages after sending
-          messageInput.value = '';  // Clear the input field
-        } else {
-          chatBox.innerHTML += `<p class="text-red-500">Failed to send message.</p>`;
-        }
-      } catch (error) {
-        chatBox.innerHTML += `<p class="text-red-500">An error occurred while sending the message.</p>`;
-      }
-    }
+    fetchMessages(); // Fetch initial messages
+    startPolling(); // Start live message updates
   });
+});
 
-  // Select recipient
-  document.querySelectorAll('.user-item').forEach(user => {
-    user.addEventListener('click', () => {
-      recipient = user.dataset.username;
-      chatHeader.innerHTML = `Chat with ${recipient}`;  // Display the recipient name
-      fetchMessages();  // Fetch old messages when a user is selected
+// Handle Back Button
+backButton.addEventListener("click", () => {
+  leftMenu.style.display = "block"; // Show the user list
+  leftMenu.classList.add("w-full"); // Make user list full width on mobile
+  chatInterface.style.display = "none"; // Hide the chat interface
 
-      // Display the current date once a user is selected
-      displayCurrentDate();
+  stopPolling(); // Stop polling when leaving chat
+});
 
-      // Show the input and send button when a recipient is selected
-      chatForm.style.display = 'flex';
-
-      // Save the selected user in localStorage
-      localStorage.setItem('selectedRecipient', recipient);
+// Send Message
+chatForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = messageInput.value.trim();
+  if (message && recipient) {
+    await fetch("/send-message/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient, message }),
     });
-  });
-
-  // Initially check if a user was already selected and stored in localStorage
-  const savedRecipient = localStorage.getItem('selectedRecipient');
-  if (savedRecipient) {
-    recipient = savedRecipient;
-    chatHeader.innerHTML = `Chat with ${recipient}`;  // Display the recipient name
-    fetchMessages();  // Fetch old messages for the saved recipient
-    displayCurrentDate();  // Display the current date
-    chatForm.style.display = 'flex';  // Show the input and send button
-  } else {
-    chatForm.style.display = 'none';  // Hide the input and send button if no recipient selected
+    fetchMessages();
+    messageInput.value = "";
   }
+});
+
+// Fetch Messages
+async function fetchMessages() {
+  if (recipient) {
+    const response = await fetch(`/messages/${recipient}/`);
+    const data = await response.json();
+    chatMessages.innerHTML = "";
+
+    if (data.messages.length === 0) {
+      // Display a message if there are no conversations
+      const noMessagesDiv = document.createElement("div");
+      noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
+      noMessagesDiv.textContent = "No conversations yet!";
+      chatMessages.appendChild(noMessagesDiv);
+    } else {
+      let lastDate = null; // Track the last displayed date
+
+      data.messages.forEach((msg) => {
+        const messageDate = new Date(msg.timestamp); // Assume `timestamp` field in ISO format
+        const formattedDate = formatDate(messageDate);
+        const formattedTime = formatTime(messageDate);
+
+        // Display date if it's different from the last displayed date
+        if (lastDate !== formattedDate) {
+          const dateDiv = document.createElement("div");
+          dateDiv.classList.add(
+            "text-center",
+            "text-gray-500",
+            "my-4",
+            "font-semibold"
+          );
+          dateDiv.textContent = formattedDate;
+          chatMessages.appendChild(dateDiv);
+          lastDate = formattedDate;
+        }
+
+        // Add the message
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
+        if (msg.sender === "{{ request.user.username }}") {
+          messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
+        } else {
+          messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
+        }
+
+        messageDiv.innerHTML = `
+          <strong>${msg.sender
+            .charAt(0)
+            .toUpperCase() + msg.sender.slice(1)}</strong><br>
+          ${msg.content}
+          <div class="text-gray-400 text-xs mt-2">${formattedTime}</div>
+        `;
+        chatMessages.appendChild(messageDiv);
+      });
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to the latest message
+  }
+}
+
+// Start polling messages every 5 seconds
+function startPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval); // Clear any existing interval
+  }
+  pollInterval = setInterval(fetchMessages, 1000); // Fetch messages every 1 seconds
+}
+
+// Stop polling
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+// Utility function to format the date
+function formatDate(date) {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+  // Format date as "dd mm, yy"
+  const options = { day: "numeric", month: "long", year: "numeric" };
+  return date.toLocaleDateString("en-US", options);
+}
+
+// Utility function to format the time
+function formatTime(date) {
+  const options = { hour: "numeric", minute: "2-digit", hour12: true };
+  return date.toLocaleTimeString("en-US", options);
+}
 
 </script>
+
+
+
 {% endblock %}
