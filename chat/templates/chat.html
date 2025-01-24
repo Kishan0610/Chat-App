@@ -102,62 +102,64 @@ chatForm.addEventListener("submit", async (e) => {
   }
 });
 
+// Utility function to convert UTC to local time
+function convertToLocalTime(utcDateString) {
+    const utcDate = new Date(utcDateString); // Parse the UTC date
+    return new Date(utcDate.getTime() - utcDate.getTimezoneOffset() * 60000);
+}
+
 // Fetch Messages
 async function fetchMessages() {
-  if (recipient) {
-    const response = await fetch(`/messages/${recipient}/`);
-    const data = await response.json();
-    chatMessages.innerHTML = "";
+    if (recipient) {
+        const response = await fetch(`/messages/${recipient}/`);
+        const data = await response.json();
+        chatMessages.innerHTML = "";
 
-    if (data.messages.length === 0) {
-      // Display a message if there are no conversations
-      const noMessagesDiv = document.createElement("div");
-      noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
-      noMessagesDiv.textContent = "No conversations yet!";
-      chatMessages.appendChild(noMessagesDiv);
-    } else {
-      let lastDate = null; // Track the last displayed date
-
-      data.messages.forEach((msg) => {
-        const messageDate = new Date(msg.timestamp); // Assume `timestamp` field in ISO format
-        const formattedDate = formatDate(messageDate);
-        const formattedTime = formatTime(messageDate);
-
-        // Display date if it's different from the last displayed date
-        if (lastDate !== formattedDate) {
-          const dateDiv = document.createElement("div");
-          dateDiv.classList.add(
-            "text-center",
-            "text-gray-500",
-            "my-4",
-            "font-semibold"
-          );
-          dateDiv.textContent = formattedDate;
-          chatMessages.appendChild(dateDiv);
-          lastDate = formattedDate;
-        }
-
-        // Add the message
-        const messageDiv = document.createElement("div");
-        messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
-        if (msg.sender === "{{ request.user.username }}") {
-          messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
+        if (data.messages.length === 0) {
+            const noMessagesDiv = document.createElement("div");
+            noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
+            noMessagesDiv.textContent = "No conversations yet!";
+            chatMessages.appendChild(noMessagesDiv);
         } else {
-          messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
-        }
+            let lastDate = null;
 
-        messageDiv.innerHTML = `
-          <strong>${msg.sender
-            .charAt(0)
-            .toUpperCase() + msg.sender.slice(1)}</strong><br>
-          ${msg.content}
-          <div class="text-gray-400 text-xs mt-2">${formattedTime}</div>
-        `;
-        chatMessages.appendChild(messageDiv);
-      });
+            data.messages.forEach((msg) => {
+                // Convert the UTC timestamp to local time
+                const messageDate = convertToLocalTime(msg.timestamp);
+                const formattedDate = formatDate(messageDate);
+                const formattedTime = formatTime(messageDate);
+
+                if (lastDate !== formattedDate) {
+                    const dateDiv = document.createElement("div");
+                    dateDiv.classList.add(
+                        "text-center",
+                        "text-gray-500",
+                        "my-4",
+                        "font-semibold"
+                    );
+                    dateDiv.textContent = formattedDate;
+                    chatMessages.appendChild(dateDiv);
+                    lastDate = formattedDate;
+                }
+
+                const messageDiv = document.createElement("div");
+                messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
+                if (msg.sender === "{{ request.user.username }}") {
+                    messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
+                } else {
+                    messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
+                }
+
+                messageDiv.innerHTML = `
+                    <strong>${msg.sender.charAt(0).toUpperCase() + msg.sender.slice(1)}</strong><br>
+                    ${msg.content}
+                    <div class="text-gray-400 text-xs mt-2">${formattedTime}</div>
+                `;
+                chatMessages.appendChild(messageDiv);
+            });
+        }
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to the latest message
-  }
 }
 
 // Start polling messages every 5 seconds

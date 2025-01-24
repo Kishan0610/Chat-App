@@ -22,6 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-myl2vmmsntt@3dcodv)p6lwla)ry#r*2gpr#5)m+dxn!1)334)'
 
+TIME_ZONE = 'Asia/Kolkata'  # Set to your local timezone
+USE_TZ = True  # Ensure this is True for timezone-aware datetimes
+
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 

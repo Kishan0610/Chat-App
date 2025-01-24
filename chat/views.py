@@ -7,11 +7,12 @@ from .models import Message
 from django.http import JsonResponse
 import json
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.timezone import localtime
 
 def index(request):
     if request.user.is_authenticated:
-        return redirect('chat')  
-    return redirect('login')  
+        return redirect('chat')
+    return redirect('login')
 
 def signup(request):
     if request.method == 'POST':
@@ -47,7 +48,7 @@ def fetch_messages(request, recipient_username):
         messages = messages.order_by('timestamp')
 
         message_list = [
-            {"sender": msg.sender.username, "content": msg.content, "timestamp": msg.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+            {"sender": msg.sender.username, "content": msg.content, "timestamp": msg.timestamp.isoformat()}  # Send ISO timestamp
             for msg in messages
         ]
         return JsonResponse({"messages": message_list}, status=200)
@@ -64,7 +65,7 @@ def send_message(request):
 
         try:
             recipient = User.objects.get(username=recipient_username)
-            msg = Message.objects.create(sender=sender, receiver=recipient, content=content)
+            Message.objects.create(sender=sender, receiver=recipient, content=content)
             return JsonResponse({'status': 'success', 'message': 'Message sent successfully.'}, status=200)
         except User.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Recipient not found.'}, status=404)
