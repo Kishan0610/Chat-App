@@ -25,5 +25,4 @@ A real-time chat application built with **Django**, **WebSocket**, and **Tailwin
 
 ![SignUp_ChatApp](https://github.com/user-attachments/assets/df1d61bc-4eef-493c-a5ed-f88afffcd2b6)
 
-![ChatUI_ChatApp](https://github.com/user-attachments/assets/798ba3ab-5630-436a-8b8b-9d3429bed1a6)
 
