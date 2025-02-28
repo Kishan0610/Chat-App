@@ -3,11 +3,10 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LogoutView, LoginView
-from .models import Message
+from .models import Message, Group, GroupMessage
 from django.http import JsonResponse
 import json
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.timezone import localtime
 
 def index(request):
     if request.user.is_authenticated:
@@ -70,3 +69,54 @@ def send_message(request):
         except User.DoesNotExist:
             return JsonResponse({'status': 'error', 'message': 'Recipient not found.'}, status=404)
     return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=400)
+
+@login_required
+def create_group(request):
+    if request.method == "POST":
+        name = request.POST.get("name")
+        if Group.objects.filter(name=name).exists():
+            return JsonResponse({"error": "Group name already exists"}, status=400)
+        group = Group.objects.create(name=name, creator=request.user)
+        group.members.add(request.user)
+        return JsonResponse({"message": "Group created successfully", "group_id": group.id})
+
+@login_required
+def add_member(request):
+    if request.method == "POST":
+        group_id = request.POST.get("group_id")
+        username = request.POST.get("username")
+        try:
+            group = Group.objects.get(id=group_id, creator=request.user)
+            user = User.objects.get(username=username)
+            group.members.add(user)
+            return JsonResponse({"message": "User added successfully"})
+        except Group.DoesNotExist:
+            return JsonResponse({"error": "Group not found"}, status=404)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "User not found"}, status=404)
+
+@login_required
+def send_group_message(request):
+    if request.method == "POST":
+        group_id = request.POST.get("group_id")
+        content = request.POST.get("content")
+        group = Group.objects.get(id=group_id)
+        if request.user in group.members.all():
+            message = GroupMessage.objects.create(group=group, sender=request.user, content=content)
+            return JsonResponse({"message": "Message sent", "message_id": message.id})
+        return JsonResponse({"error": "You are not in this group"}, status=403)
+    
+
+@login_required
+def fetch_group_messages(request, group_id):
+    try:
+        group = Group.objects.get(id=group_id)
+        if request.user not in group.members.all():
+            return JsonResponse({"error": "Not a member of this group"}, status=403)
+
+        messages = GroupMessage.objects.filter(group=group).order_by("timestamp")
+        message_list = [{"sender": msg.sender.username, "content": msg.content, "timestamp": msg.timestamp.isoformat()} for msg in messages]
+
+        return JsonResponse({"messages": message_list}, status=200)
+    except Group.DoesNotExist:
+        return JsonResponse({"error": "Group not found"}, status=404)

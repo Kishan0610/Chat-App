@@ -3,203 +3,569 @@
 {% block title %}Chat{% endblock %}
 
 {% block content %}
-<div class="flex h-screen">
+<div class="flex h-screen bg-gray-100">
   <!-- Left Menu -->
-  <nav id="left-menu" class="bg-gray-200 w-full md:w-1/4 p-4 overflow-y-auto rounded-l-lg shadow-lg block md:block">
-    <h3 class="font-bold text-lg text-blue-600">Users</h3>
-    <ul id="user-list">
-      {% for user in users %}
+  <nav id="left-menu" class="bg-white w-full md:w-1/4 p-4 overflow-y-auto rounded-l-lg shadow-lg block md:block">
+    <!-- Tabs for Private Chats and Group Chats -->
+    <div class="flex space-x-4 mb-4">
+      <button id="private-chat-tab" class="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg focus:outline-none">
+        Private Chats
+      </button>
+      <button id="group-chat-tab" class="flex-1 py-2 px-4 bg-gray-300 text-gray-700 rounded-lg focus:outline-none">
+        Group Chats
+      </button>
+    </div>
+
+    <!-- Private Chats List -->
+    <div id="private-chat-list" class="space-y-3">
+      <h3 class="font-bold text-lg text-blue-600 mb-4">Chat Users</h3>
+      <ul id="user-list" class="space-y-3">
+        {% for user in users %}
+        <li>
+          <a href="#" class="flex items-center p-3 bg-gray-50 hover:bg-blue-100 rounded-lg user-item shadow-sm" data-username="{{ user.username }}">
+            <span class="inline-block w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold uppercase">
+              {{ user.username|slice:":1" }}
+            </span>
+            <span class="ml-3 font-semibold text-gray-700">{{ user.username|slice:":10"|capfirst }}</span>
+            <i class="ml-auto text-gray-400 fa fa-chevron-right"></i>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Group Chats List -->
+  <div id="group-chat-list" class="space-y-3 hidden">
+    <!-- Create Group Button at the Top -->
+    <button id="create-group-button" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+      Create New Group
+    </button>
+
+    <h3 class="font-bold text-lg text-blue-600 mb-4">Groups</h3>
+    <ul id="group-list" class="space-y-3">
+      {% for group in request.user.chat_groups.all %}
       <li>
-        <a href="#" class="block p-3 mb-2 bg-white hover:bg-blue-100 rounded-lg user-item" data-username="{{ user.username }}">
-          <span class="font-bold text-gray-700">{{ user.username|slice:":10"|capfirst }}</span> <!-- Capitalize the first letter -->
-        </a>
+        <div class="flex items-center justify-between p-3 bg-gray-50 hover:bg-blue-100 rounded-lg group-item shadow-sm" data-group-id="{{ group.id }}">
+          <a href="#" class="flex items-center flex-1 group-chat-link">
+            <span class="inline-block w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold uppercase">
+              {{ group.name|slice:":1" }}
+            </span>
+            <span class="ml-3 font-semibold text-gray-700">{{ group.name|slice:":10"|capfirst }}</span>
+            <i class="ml-auto text-gray-400 fa fa-chevron-right"></i>
+          </a>
+          <button class="ml-2 text-gray-500 hover:text-blue-600 add-member-button" data-group-id="{{ group.id }}">
+            <i class="fa fa-user-plus"></i>
+          </button>
+        </div>
       </li>
       {% endfor %}
     </ul>
+  </div>
+
+    <!-- Create Group Modal -->
+    <div id="create-group-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 class="font-bold text-lg text-blue-600 mb-4">Create New Group</h3>
+        <form id="create-group-form">
+          <input type="text" id="group-name" placeholder="Group Name" class="w-full border rounded-lg p-3 mb-4">
+          <h4 class="font-semibold text-gray-700 mb-2">Add Members</h4>
+          <div id="member-selection" class="space-y-2">
+            {% for user in users %}
+            <label class="flex items-center">
+              <input type="checkbox" name="members" value="{{ user.username }}" class="mr-2">
+              <span>{{ user.username }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4">
+            Create Group
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div id="add-member-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4">
+      <div class="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 class="font-bold text-lg text-blue-600 mb-4">Add Member to Group</h3>
+        <form id="add-member-form">
+          <input type="hidden" id="add-member-group-id">
+          
+          <!-- Search Input -->
+          <div class="relative mb-4">
+            <input type="text" id="user-search" placeholder="Search users..." 
+                  class="w-full border rounded-lg p-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <i class="fa fa-search absolute right-3 top-4 text-gray-400"></i>
+          </div>
+
+          <!-- User List Container -->
+          <div id="user-list-container" class="border rounded-lg max-h-64 overflow-y-auto">
+            <div id="user-list" class="divide-y">
+              {% for user in users %}
+              <div class="modal-user-item p-3 hover:bg-blue-50 cursor-pointer" data-username="{{ user.username }}">
+                <div class="flex items-center">
+                  <span class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold uppercase">
+                    {{ user.username|slice:":1" }}
+                  </span>
+                  <span class="ml-3 text-gray-700">{{ user.username }}</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <div id="no-users-found" class="p-4 text-gray-500 text-center hidden">
+              No users found
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4">
+            Add Member
+          </button>
+        </form>
+      </div>
+    </div>
   </nav>
 
   <!-- Chat Interface -->
   <div id="chat-interface" class="flex-1 p-6 bg-gray-50 hidden md:block">
     <button id="back-button" class="bg-gray-300 px-4 py-2 rounded-lg mb-4 md:hidden">
-      Back
+      <i class="fa fa-arrow-left"></i> Back
     </button>
-    <div id="chat-box" class="bg-white p-6 h-4/5 overflow-y-auto border border-gray-300 rounded-lg">
-      <div id="chat-header" class="font-bold text-xl text-gray-700 mb-6">
-        <!-- Display a prompt if no user is selected yet -->
-        <span id="chat-header-text">Select a user to chat</span>
-        <span id="recipient-name" style="display: none;"></span>
+    <div id="chat-box" class="bg-white p-6 h-4/5 overflow-y-auto border border-gray-300 rounded-lg shadow-md">
+      <div id="chat-header" class="font-bold text-xl text-gray-700 mb-6 flex items-center">
+        <i class="fa fa-comments text-blue-500 mr-2"></i>
+        <span id="chat-header-text">Select a user or group to chat</span>
+        <span id="recipient-name" class="text-blue-600" style="display: none;"></span>
       </div>
       <div id="chat-messages" class="space-y-4"></div>
     </div>
     <form id="chat-form" class="flex mt-4" style="display:none;">
-      <input type="text" id="message" placeholder="Type your message..." class="flex-1 border rounded-lg p-3">
-      <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg">Send</button>
+      <input type="text" id="message" placeholder="Type your message..." class="flex-1 border rounded-lg p-3 shadow-sm">
+      <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-sm hover:bg-blue-700">
+        Send
+      </button>
     </form>
   </div>
 </div>
 
 <script>
-let recipient = null;
-let pollInterval = null; // Interval for polling
-const chatBox = document.getElementById("chat-box");
-const chatForm = document.getElementById("chat-form");
-const messageInput = document.getElementById("message");
-const recipientNameElem = document.getElementById("recipient-name");
-const chatHeaderText = document.getElementById("chat-header-text");
-const userItems = document.querySelectorAll(".user-item");
-const chatMessages = document.getElementById("chat-messages");
-const chatInterface = document.getElementById("chat-interface");
-const leftMenu = document.getElementById("left-menu");
-const backButton = document.getElementById("back-button");
+  let recipient = null;
+  let group = null;
+  let pollInterval = null; // Interval for polling
+  const chatBox = document.getElementById("chat-box");
+  const chatForm = document.getElementById("chat-form");
+  const messageInput = document.getElementById("message");
+  const recipientNameElem = document.getElementById("recipient-name");
+  const chatHeaderText = document.getElementById("chat-header-text");
+  const userItems = document.querySelectorAll(".user-item");
+  const chatMessages = document.getElementById("chat-messages");
+  const chatInterface = document.getElementById("chat-interface");
+  const leftMenu = document.getElementById("left-menu");
+  const backButton = document.getElementById("back-button");
 
-// Highlight the selected user
-userItems.forEach((user) => {
-  user.addEventListener("click", () => {
-    recipient = user.dataset.username;
+  // Tabs
+  const privateChatTab = document.getElementById("private-chat-tab");
+  const groupChatTab = document.getElementById("group-chat-tab");
+  const privateChatList = document.getElementById("private-chat-list");
+  const groupChatList = document.getElementById("group-chat-list");
 
-    // Highlight the selected user
-    userItems.forEach((item) => item.classList.remove("bg-blue-200")); // Remove highlight from other users
-    user.classList.add("bg-blue-200"); // Add highlight to the selected user
+  // Create Group Modal
+  const createGroupModal = document.getElementById("create-group-modal");
+  const createGroupButton = document.getElementById("create-group-button");
+  const createGroupForm = document.getElementById("create-group-form");
 
-    recipientNameElem.textContent =
-      recipient.charAt(0).toUpperCase() + recipient.slice(1); // Capitalize the first letter
-    recipientNameElem.style.display = "inline";
-    chatHeaderText.style.display = "none"; // Hide the "Select a user to chat" prompt
-    chatForm.style.display = "flex";
+  // Add Member Modal
+  const addMemberModal = document.getElementById("add-member-modal");
+  const addMemberForm = document.getElementById("add-member-form");
+  const addMemberGroupId = document.getElementById("add-member-group-id");
+  const addMemberUsername = document.getElementById("add-member-username");
 
-    // For mobile: hide user list and display chatbox
-    if (window.innerWidth < 768) {
-      leftMenu.style.display = "none";
-      chatInterface.style.display = "block";
-    }
-
-    fetchMessages(); // Fetch initial messages
-    startPolling(); // Start live message updates
+  // Tab Switching Logic
+  privateChatTab.addEventListener("click", () => {
+    privateChatTab.classList.add("bg-blue-600", "text-white");
+    privateChatTab.classList.remove("bg-gray-300", "text-gray-700");
+    groupChatTab.classList.remove("bg-blue-600", "text-white");
+    groupChatTab.classList.add("bg-gray-300", "text-gray-700");
+    privateChatList.classList.remove("hidden");
+    groupChatList.classList.add("hidden");
   });
-});
 
-// Handle Back Button
-backButton.addEventListener("click", () => {
-  leftMenu.style.display = "block"; // Show the user list
-  leftMenu.classList.add("w-full"); // Make user list full width on mobile
-  chatInterface.style.display = "none"; // Hide the chat interface
+  groupChatTab.addEventListener("click", () => {
+    groupChatTab.classList.add("bg-blue-600", "text-white");
+    groupChatTab.classList.remove("bg-gray-300", "text-gray-700");
+    privateChatTab.classList.remove("bg-blue-600", "text-white");
+    privateChatTab.classList.add("bg-gray-300", "text-gray-700");
+    groupChatList.classList.remove("hidden");
+    privateChatList.classList.add("hidden");
+  });
 
-  stopPolling(); // Stop polling when leaving chat
-});
+  // Open Create Group Modal
+  createGroupButton.addEventListener("click", () => {
+    createGroupModal.classList.remove("hidden");
+  });
 
-// Send Message
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const message = messageInput.value.trim();
-  if (message && recipient) {
-    await fetch("/send-message/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipient, message }),
-    });
-    fetchMessages();
-    messageInput.value = "";
+  // Close Create Group Modal
+  createGroupModal.addEventListener("click", (e) => {
+    if (e.target === createGroupModal) {
+      createGroupModal.classList.add("hidden");
+    }
+  });
+
+  // Function to get the CSRF token from the meta tag
+  function getCSRFToken() {
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    return metaTag ? metaTag.content : '';
   }
-});
 
-// Utility function to convert UTC to local time
-function convertToLocalTime(utcDateString) {
+  // Handle Create Group Form Submission
+  createGroupForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const groupName = document.getElementById("group-name").value.trim();
+    const selectedMembers = Array.from(document.querySelectorAll('input[name="members"]:checked')).map((checkbox) => checkbox.value);
+
+    if (groupName && selectedMembers.length > 0) {
+      const response = await fetch("/create-group/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": getCSRFToken(), // Include the CSRF token in the headers
+        },
+        body: `name=${groupName}&members=${selectedMembers.join(",")}`,
+      });
+      const data = await response.json();
+      if (data.group_id) {
+        location.reload(); // Reload the page to show the new group
+      }
+    }
+  });
+
+  // Open Group Chat
+  document.querySelectorAll(".group-chat-link").forEach((groupLink) => {
+    groupLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      const groupItem = groupLink.closest(".group-item");
+      group = groupItem.dataset.groupId;
+      recipient = null;
+
+      // Highlight the selected group
+      document.querySelectorAll(".group-item").forEach((item) => item.classList.remove("bg-blue-200"));
+      groupItem.classList.add("bg-blue-200");
+
+      recipientNameElem.textContent = groupItem.querySelector("span:nth-child(2)").textContent; // Get the group name
+      recipientNameElem.style.display = "inline";
+      chatHeaderText.style.display = "none"; // Hide the "Select a user to chat" prompt
+      chatForm.style.display = "flex";
+
+      // For mobile: hide user list and display chatbox
+      if (window.innerWidth < 768) {
+        leftMenu.style.display = "none";
+        chatInterface.style.display = "block";
+      }
+
+      fetchGroupMessages(); // Fetch initial group messages
+      startPolling(); // Start live message updates
+    });
+  });
+
+  // Open Add Member Modal
+  document.querySelectorAll(".add-member-button").forEach((addMemberButton) => {
+    addMemberButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // Prevent the group chat link from being triggered
+      const groupId = addMemberButton.dataset.groupId;
+      addMemberGroupId.value = groupId;
+      addMemberModal.classList.remove("hidden");
+    });
+  });
+
+  // Close Add Member Modal
+  addMemberModal.addEventListener("click", (e) => {
+    if (e.target === addMemberModal) {
+      addMemberModal.classList.add("hidden");
+    }
+  });
+
+  // Handle Add Member Form Submission
+  addMemberForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = addMemberUsername.value.trim();
+    if (username) {
+      const response = await fetch("/add-member/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": getCSRFToken(), // Include the CSRF token in the headers
+        },
+        body: `group_id=${addMemberGroupId.value}&username=${username}`,
+      });
+      const data = await response.json();
+      if (data.message === "User added successfully") {
+        addMemberModal.classList.add("hidden");
+        addMemberUsername.value = "";
+      }
+    }
+  });
+
+  // Highlight the selected user
+  userItems.forEach((user) => {
+    user.addEventListener("click", () => {
+      recipient = user.dataset.username;
+      group = null;
+
+      // Highlight the selected user
+      userItems.forEach((item) => item.classList.remove("bg-blue-200")); // Remove highlight from other users
+      document.querySelectorAll(".group-item").forEach((item) => item.classList.remove("bg-blue-200")); // Remove highlight from groups
+      user.classList.add("bg-blue-200"); // Add highlight to the selected user
+
+      recipientNameElem.textContent =
+        recipient.charAt(0).toUpperCase() + recipient.slice(1); // Capitalize the first letter
+      recipientNameElem.style.display = "inline";
+      chatHeaderText.style.display = "none"; // Hide the "Select a user to chat" prompt
+      chatForm.style.display = "flex";
+
+      // For mobile: hide user list and display chatbox
+      if (window.innerWidth < 768) {
+        leftMenu.style.display = "none";
+        chatInterface.style.display = "block";
+      }
+
+      fetchMessages(); // Fetch initial messages
+      startPolling(); // Start live message updates
+    });
+  });
+
+  // Handle Back Button
+  backButton.addEventListener("click", () => {
+    leftMenu.style.display = "block"; // Show the user list
+    leftMenu.classList.add("w-full"); // Make user list full width on mobile
+    chatInterface.style.display = "none"; // Hide the chat interface
+
+    stopPolling(); // Stop polling when leaving chat
+  });
+
+  // Send Group Message
+  chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = messageInput.value.trim();
+    if (message) {
+      if (recipient) {
+        await fetch("/send-message/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCSRFToken(), // Include the CSRF token in the headers
+          },
+          body: JSON.stringify({ recipient, message }),
+        });
+        fetchMessages();
+      } else if (group) {
+        await fetch("/send-group-message/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRFToken": getCSRFToken(), // Include the CSRF token in the headers
+          },
+          body: `group_id=${group}&content=${message}`,
+        });
+        fetchGroupMessages();
+      }
+      messageInput.value = "";
+    }
+  });
+
+  // Utility function to convert UTC to local time
+  function convertToLocalTime(utcDateString) {
     const utcDate = new Date(utcDateString); // Parse the UTC date
-    return new Date(utcDate.getTime() - utcDate.getTimezoneOffset() * 60000);
-}
+    return new Date(utcDate.getTime()); // Automatically adjusts to the local timezone
+  }
 
-// Fetch Messages
-async function fetchMessages() {
+  // Fetch Messages
+  async function fetchMessages() {
     if (recipient) {
-        const response = await fetch(`/messages/${recipient}/`);
-        const data = await response.json();
-        chatMessages.innerHTML = "";
+      const response = await fetch(`/messages/${recipient}/`);
+      const data = await response.json();
+      chatMessages.innerHTML = "";
 
-        if (data.messages.length === 0) {
-            const noMessagesDiv = document.createElement("div");
-            noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
-            noMessagesDiv.textContent = "No conversations yet!";
-            chatMessages.appendChild(noMessagesDiv);
-        } else {
-            let lastDate = null;
+      if (data.messages.length === 0) {
+        const noMessagesDiv = document.createElement("div");
+        noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
+        noMessagesDiv.textContent = "No conversations yet!";
+        chatMessages.appendChild(noMessagesDiv);
+      } else {
+        let lastDate = null;
 
-            data.messages.forEach((msg) => {
-                // Convert the UTC timestamp to local time
-                const messageDate = convertToLocalTime(msg.timestamp);
-                const formattedDate = formatDate(messageDate);
-                const formattedTime = formatTime(messageDate);
+        data.messages.forEach((msg) => {
+          // Convert the UTC timestamp to local time
+          const messageDate = convertToLocalTime(msg.timestamp);
+          const formattedDate = formatDate(messageDate);
+          const formattedTime = formatTime(messageDate);
 
-                if (lastDate !== formattedDate) {
-                    const dateDiv = document.createElement("div");
-                    dateDiv.classList.add(
-                        "text-center",
-                        "text-gray-500",
-                        "my-4",
-                        "font-semibold"
-                    );
-                    dateDiv.textContent = formattedDate;
-                    chatMessages.appendChild(dateDiv);
-                    lastDate = formattedDate;
-                }
+          if (lastDate !== formattedDate) {
+            const dateDiv = document.createElement("div");
+            dateDiv.classList.add(
+              "text-center",
+              "text-gray-500",
+              "my-4",
+              "font-semibold"
+            );
+            dateDiv.textContent = formattedDate;
+            chatMessages.appendChild(dateDiv);
+            lastDate = formattedDate;
+          }
 
-                const messageDiv = document.createElement("div");
-                messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
-                if (msg.sender === "{{ request.user.username }}") {
-                    messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
-                } else {
-                    messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
-                }
+          const messageDiv = document.createElement("div");
+          messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
+          if (msg.sender === "{{ request.user.username }}") {
+            messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
+          } else {
+            messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
+          }
 
-                messageDiv.innerHTML = `
-                    <strong>${msg.sender.charAt(0).toUpperCase() + msg.sender.slice(1)}</strong><br>
+          messageDiv.innerHTML = `
+                    <strong>${msg.sender
+                      .charAt(0)
+                      .toUpperCase() + msg.sender.slice(1)}</strong><br>
                     ${msg.content}
                     <div class="text-gray-400 text-xs mt-2">${formattedTime}</div>
                 `;
-                chatMessages.appendChild(messageDiv);
-            });
-        }
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+          chatMessages.appendChild(messageDiv);
+        });
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-}
-
-// Start polling messages every 5 seconds
-function startPolling() {
-  if (pollInterval) {
-    clearInterval(pollInterval); // Clear any existing interval
   }
-  pollInterval = setInterval(fetchMessages, 1000); // Fetch messages every 1 seconds
-}
 
-// Stop polling
-function stopPolling() {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+  // Fetch Group Messages
+  async function fetchGroupMessages() {
+    if (group) {
+      const response = await fetch(`/group-messages/${group}/`);
+      const data = await response.json();
+      chatMessages.innerHTML = "";
+
+      if (data.messages.length === 0) {
+        const noMessagesDiv = document.createElement("div");
+        noMessagesDiv.classList.add("text-gray-500", "text-center", "mt-4");
+        noMessagesDiv.textContent = "No conversations yet!";
+        chatMessages.appendChild(noMessagesDiv);
+      } else {
+        let lastDate = null;
+
+        data.messages.forEach((msg) => {
+          // Convert the UTC timestamp to local time
+          const messageDate = convertToLocalTime(msg.timestamp);
+          const formattedDate = formatDate(messageDate);
+          const formattedTime = formatTime(messageDate);
+
+          if (lastDate !== formattedDate) {
+            const dateDiv = document.createElement("div");
+            dateDiv.classList.add(
+              "text-center",
+              "text-gray-500",
+              "my-4",
+              "font-semibold"
+            );
+            dateDiv.textContent = formattedDate;
+            chatMessages.appendChild(dateDiv);
+            lastDate = formattedDate;
+          }
+
+          const messageDiv = document.createElement("div");
+          messageDiv.classList.add("p-3", "rounded-lg", "max-w-sm");
+          if (msg.sender === "{{ request.user.username }}") {
+            messageDiv.classList.add("ml-auto", "bg-blue-100", "text-right");
+          } else {
+            messageDiv.classList.add("mr-auto", "bg-gray-100", "text-left");
+          }
+
+          messageDiv.innerHTML = `
+                    <strong>${msg.sender
+                      .charAt(0)
+                      .toUpperCase() + msg.sender.slice(1)}</strong><br>
+                    ${msg.content}
+                    <div class="text-gray-400 text-xs mt-2">${formattedTime}</div>
+                `;
+          chatMessages.appendChild(messageDiv);
+        });
+      }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
   }
-}
 
-// Utility function to format the date
-function formatDate(date) {
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
+  // User Search Functionality
+  const userSearch = document.getElementById('user-search');
+  const userSearchItems = document.querySelectorAll('.user-item')
+  const noUsersFound = document.getElementById('no-users-found');
 
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  userSearch.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    let hasVisibleItems = false;
 
-  // Format date as "dd mm, yy"
-  const options = { day: "numeric", month: "long", year: "numeric" };
-  return date.toLocaleDateString("en-US", options);
-}
+    userSearchItems.forEach(item => {
+      const username = item.dataset.username.toLowerCase();
+      if (username.includes(searchTerm)) {
+        item.classList.remove('hidden');
+        hasVisibleItems = true;
+      } else {
+        item.classList.add('hidden');
+      }
+    });
 
-// Utility function to format the time
-function formatTime(date) {
-  const options = { hour: "numeric", minute: "2-digit", hour12: true };
-  return date.toLocaleTimeString("en-US", options);
-}
+    noUsersFound.classList.toggle('hidden', hasVisibleItems);
+  });
 
+  // Auto-fill search input when clicking a user
+  document.querySelectorAll('.user-item').forEach(item => {
+    item.addEventListener('click', () => {
+      userSearch.value = item.dataset.username;
+    });
+  });
+
+  // Handle Add Member Form Submission
+  addMemberForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = userSearch.value.trim();
+    if (username) {
+      const response = await fetch("/add-member/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": getCSRFToken(),
+        },
+        body: `group_id=${addMemberGroupId.value}&username=${username}`,
+      });
+      const data = await response.json();
+      if (data.message === "User added successfully") {
+        addMemberModal.classList.add("hidden");
+        userSearch.value = "";
+      }
+    }
+  });
+
+  // Start polling messages every 5 seconds
+  function startPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  // Utility function to format the date
+  function formatDate(date) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+    // Format date as "dd mm, yy"
+    const options = { day: "numeric", month: "long", year: "numeric" };
+    return date.toLocaleDateString("en-US", options);
+  }
+
+  // Utility function to format the time
+  function formatTime(date) {
+    const options = { hour: "numeric", minute: "2-digit", hour12: true };
+    return date.toLocaleTimeString("en-US", options);
+  }
 </script>
-
-
-
 {% endblock %}
