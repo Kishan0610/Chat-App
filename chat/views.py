@@ -9,9 +9,10 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 
 def index(request):
-    if request.user.is_authenticated:
-        return redirect('chat')
-    return redirect('login')
+    return render(request, 'index.html')
+    # if request.user.is_authenticated:
+    #     return redirect('chat')
+    # return redirect('login')
 
 def signup(request):
     if request.method == 'POST':

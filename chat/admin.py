@@ -15,3 +15,7 @@ class GroupMessageAdmin(admin.ModelAdmin):
 admin.site.register(Message, MessageAdmin)
 admin.site.register(Group, GroupAdmin)
 admin.site.register(GroupMessage, GroupMessageAdmin)
+
+admin.site.site_header = "Chat-App Administration"  # Change header text
+admin.site.site_title = "Chat-App Admin Portal"  # Change browser tab title
+admin.site.index_title = "Welcome to Chat-App Admin Panel"
