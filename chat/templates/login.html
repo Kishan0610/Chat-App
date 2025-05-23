@@ -7,7 +7,6 @@
   <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
     <h2 class="text-3xl font-extrabold text-center text-gray-900">Login to Your Account</h2>
 
-    <!-- Display error message for invalid login -->
     {% if form.non_field_errors %}
       <div class="mb-4 text-red-500 text-center">
         {% for error in form.non_field_errors %}
@@ -19,7 +18,6 @@
     <form method="post" class="space-y-6">
       {% csrf_token %}
       <div class="space-y-4">
-        <!-- Username Field -->
         <div>
           {{ form.username.label_tag }}
           <input type="text" name="username" placeholder="Username" 
@@ -35,7 +33,6 @@
           {% endif %}
         </div>
 
-        <!-- Password Field -->
         <div>
           {{ form.password.label_tag }}
           <input type="password" name="password" placeholder="Password" 
@@ -55,6 +52,10 @@
         class="w-full px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300">
         Login
       </button>
+
+      <div class="text-center">
+        <a href="{% url 'password_reset' %}" class="text-blue-500 hover:underline">Forgot Password?</a>
+      </div>
     </form>
 
     <p class="text-center text-gray-600">
@@ -63,11 +64,4 @@
     </p>
   </div>
 </div>
-
-<!-- Success Message Pop-up -->
-<div id="login-success" class="fixed top-0 left-0 right-0 z-50 bg-green-500 text-white p-4 text-center hidden">
-  <p>Logged in successfully!</p>
-</div>
-
-
 {% endblock %}

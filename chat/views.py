@@ -2,27 +2,128 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth.views import LogoutView, LoginView
+from django.contrib.auth.views import LogoutView, LoginView, PasswordResetView
 from .models import Message, Group, GroupMessage
 from django.http import JsonResponse
 import json
 from django.views.decorators.csrf import csrf_exempt
+from django import forms
+from django.contrib import messages
+from django.contrib.auth.forms import PasswordResetForm
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
+from django.core.mail import send_mail
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.contrib.sites.shortcuts import get_current_site
+from .models import EmailVerification
+
+class CustomUserCreationForm(UserCreationForm):
+    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={
+        'class': 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+        'placeholder': 'Email'
+    }))
+
+    class Meta:
+        model = User
+        fields = ("username", "email", "password1", "password2")
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("This email address is already in use.")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data["email"]
+        if commit:
+            user.save()
+        return user
+    
+class CustomPasswordResetForm(PasswordResetForm):
+    def send_mail(self, subject_template_name, email_template_name,
+                  context, from_email, to_email, html_email_template_name=None):
+        """
+        Send a django.core.mail.EmailMultiAlternatives with both text and HTML versions
+        """
+        subject = render_to_string(subject_template_name, context)
+        subject = ''.join(subject.splitlines())  # Remove any line breaks
+        body = render_to_string(email_template_name, context)
+
+        email_message = EmailMultiAlternatives(
+            subject, body, from_email, [to_email]
+        )
+
+        if html_email_template_name is not None:
+            html_email = render_to_string(html_email_template_name, context)
+            email_message.attach_alternative(html_email, 'text/html')
+
+        email_message.send()
+
+class CustomPasswordResetView(PasswordResetView):
+    form_class = CustomPasswordResetForm
+    template_name = 'password_reset.html'
+    email_template_name = 'password_reset_email.html'
+    subject_template_name = 'password_reset_subject.txt'
+    html_email_template_name = 'password_reset_email.html'
+    success_url = '/password-reset/done/'
+
+    def form_valid(self, form):
+        email = form.cleaned_data['email']
+        if not User.objects.filter(email=email).exists():
+            messages.error(self.request, "No account exists with this email address.")
+            return self.form_invalid(form)
+        return super().form_valid(form)
 
 def index(request):
     if request.user.is_authenticated:
         return redirect('chat')
     else:
-        return render(request, 'index.html')
+        return render(request, 'index.html') 
 
 def signup(request):
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            form.save()
-            return redirect('login')
+            user = form.save(commit=False)
+            user.is_active = False  # User can't login until verified
+            user.save()
+            
+            # Create and send verification email
+            verification = EmailVerification.create_verification(user)
+            current_site = get_current_site(request)
+            mail_subject = 'Activate your account'
+            message = render_to_string('acc_activate_email.html', {
+                'user': user,
+                'domain': current_site.domain,
+                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                'token': verification.token,
+            })
+            send_mail(mail_subject, message, 'noreply@yourdomain.com', [user.email])
+            
+            return render(request, 'registration/verification_sent.html')
     else:
-        form = UserCreationForm()
+        form = CustomUserCreationForm()
     return render(request, 'signup.html', {'form': form})
+
+def activate(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+    
+    if user is not None:
+        verification = EmailVerification.objects.filter(user=user, token=token).first()
+        if verification and not verification.is_verified:
+            verification.is_verified = True
+            verification.save()
+            user.is_active = True
+            user.save()
+            return render(request, 'registration/verification_success.html')
+    
+    return render(request, 'registration/verification_invalid.html')
 
 class CustomLoginView(LoginView):
     template_name = 'login.html'
@@ -33,6 +134,7 @@ class CustomLoginView(LoginView):
 
 class CustomLogoutView(LogoutView):
     http_method_names = ['get', 'post']
+
 
 @login_required
 def chat_view(request):
